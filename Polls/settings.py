@@ -67,7 +67,7 @@ DATABASES = {
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'ART'
+TIME_ZONE = 'America/Argentina'
 
 USE_I18N = True
 
