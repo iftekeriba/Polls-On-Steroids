@@ -38,7 +38,7 @@ def create_poll(question, days):
     `days` offset to now (negative for polls published in the past,
     positive for polls that have yet to be published).
     """
-    return Poll.object.create(question = question,
+    return Poll.objects.create(question = question,
         pub_date = timezone.now() + datetime.timedelta(days = days))
 
 
@@ -53,7 +53,7 @@ class PollViewTests(TestCase):
         self.assertQuerysetEqual(response.context['latest_poll_list'], [])
 
     def test_index_with_a_past_poll(self):
-        create_poll("Past poll", days=-30)
+        create_poll("Past poll.", days=-30)
         response = self.client.get(reverse('polls:index'))
         self.assertEqual(response.status_code, 200)
         self.assertQuerysetEqual(response.context['latest_poll_list'],
