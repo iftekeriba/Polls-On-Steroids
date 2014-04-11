@@ -27,5 +27,5 @@ def vote(request, poll_id):
     return HttpResponseRedirect(reverse('polls:results', args=(p.id,)))
 
 def results(request, poll_id):
-    get_object_or_404(Poll, pk=poll_id)
-    return render(request, )
+    poll = get_object_or_404(Poll, pk=poll_id)
+    return render(request, 'polls/results.html', {'poll': poll})
