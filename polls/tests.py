@@ -111,3 +111,7 @@ class PollViewTests(TestCase):
         past_poll = create_poll(question='Past Poll.', days=-5)
         response = self.client.get(reverse('polls:detail', args=(past_poll.id,)))
         self.assertContains(response, past_poll.question, status_code=200)
+
+
+# include get_queryset in detail view to exclude future polls and test it
+# Exclude polls without choices
