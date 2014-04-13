@@ -7,31 +7,31 @@ from django.utils import timezone
 from django.db.models import Count
 
 
+def filter_polls():
+    """
+    Filters polls with less than 2 choices and future pub_dates.
+    """
+    p = Poll.objects.annotate(num_choices=Count('choice'))
+    return p.filter(pub_date__lte = timezone.now(), num_choices__gte = 2)
+
+
 class IndexView(generic.ListView):
     template_name = 'polls/index.html'
     context_object_name = 'latest_poll_list'
 
     def get_queryset(self):
-        p = Poll.objects.annotate(num_choices=Count('choice'))
-        return p.filter(
-            pub_date__lte = timezone.now(), num_choices__gte = 2
-            ).order_by('-pub_date')[:5]
+        return filter_polls().order_by('-pub_date')[:5]
 
 
 class DetailView(generic.DetailView):
-    model = Poll
     template_name = 'polls/detail.html'
 
     def get_queryset(self):
-        """
-        Excludes any polls that aren't published yet.
-        """
-        return Poll.objects.filter(pub_date__lte = timezone.now())
+        return filter_polls()
 
 
 def vote(request, poll_id):
-    p = get_object_or_404(Poll.objects.filter(pub_date__lte = timezone.now()),
-                          pk = poll_id)
+    p = get_object_or_404(filter_polls().filter(pk = poll_id))
     try:
         selected_choice = p.choice_set.get(pk = request.POST['choice'])
     except (KeyError, Choice.DoesNotExist):
@@ -45,8 +45,7 @@ def vote(request, poll_id):
 
 
 class ResultsView(generic.DetailView):
-    model = Poll
     template_name = 'polls/results.html'
 
     def get_queryset(self):
-        return Poll.objects.filter(pub_date__lte = timezone.now())
+        return filter_polls()
