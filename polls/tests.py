@@ -113,5 +113,6 @@ class PollViewTests(TestCase):
         self.assertContains(response, past_poll.question, status_code=200)
 
 
+# Deny access to future polls vote and results view through their url
 # include get_queryset in detail view to exclude future polls and test it
 # Exclude polls without choices
