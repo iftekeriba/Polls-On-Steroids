@@ -9,7 +9,7 @@ from django.db.models import Count
 
 def filter_polls():
     """
-    Filters polls with less than 2 choices and future pub_dates.
+    Excludes polls with less than 2 choices or future pub_date.
     """
     p = Poll.objects.annotate(num_choices=Count('choice'))
     return p.filter(pub_date__lte = timezone.now(), num_choices__gte = 2)

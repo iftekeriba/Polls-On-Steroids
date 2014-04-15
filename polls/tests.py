@@ -32,87 +32,153 @@ class PollMethodTests(TestCase):
         self.assertEqual(recent_poll.was_published_recently(), True)
 
 
-def create_poll(question, days):
+def create_poll(question, days, num_choices):
     """
-    Creates a poll with the given `question` published the given number of
-    `days` offset to now (negative for polls published in the past,
-    positive for polls that have yet to be published).
+    Creates a poll with the given 'question' published with an offset
+    of 'days' with respect to now and 'num_choices' available choices.
     """
-    return Poll.objects.create(question = question,
-        pub_date = timezone.now() + datetime.timedelta(days = days))
+    p = Poll.objects.create(question=question,
+        pub_date = timezone.now() + datetime.timedelta(days=days))
+    for i in range (0, num_choices):
+        p.choice_set.create(choice_text=str(i), votes=0)
+    return p
 
 
-class PollViewTests(TestCase):
+class PollIndexViewTests(TestCase):
+    """
+    Only past polls with 2 or more choices must be shown.
+    If there are no polls, or none of them satisfy these conditions,
+    an appropriate message should be displayed.
+    """
     def test_index_view_with_no_polls(self):
-        """
-        If no polls exist, an appropriate message should be displayed.
-        """
         response = self.client.get(reverse('polls:index'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No polls are available")
         self.assertQuerysetEqual(response.context['latest_poll_list'], [])
 
-    def test_index_with_a_past_poll(self):
-        create_poll("Past poll.", days=-30)
+    def test_index_with_a_past_poll_with_2_choices(self):
+        create_poll("Past poll.", days=-30, num_choices=2)
         response = self.client.get(reverse('polls:index'))
         self.assertEqual(response.status_code, 200)
         self.assertQuerysetEqual(response.context['latest_poll_list'],
             ['<Poll: Past poll.>'])
 
-    def test_index_view_with_a_future_poll(self):
-        """
-        Polls with a pub_date in the future should not be displayed on the
-        index page.
-        """
-        create_poll(question="Future poll.", days=30)
+    def test_index_with_a_past_poll_with_0_choices(self):
+        create_poll("Past poll.", days=-30, num_choices=0)
         response = self.client.get(reverse('polls:index'))
         self.assertContains(response, "No polls are available.", status_code=200)
         self.assertQuerysetEqual(response.context['latest_poll_list'], [])
 
-    def test_index_view_with_future_poll_and_past_poll(self):
-        """
-        Even if both past and future polls exist, only past polls should be
-        displayed.
-        """
-        create_poll(question="Past poll.", days=-30)
-        create_poll(question="Future poll.", days=30)
+    def test_index_view_with_a_future_poll_with_2_choices(self):
+        create_poll(question="Future poll.", days=30, num_choices=2)
+        response = self.client.get(reverse('polls:index'))
+        self.assertContains(response, "No polls are available.", status_code=200)
+        self.assertQuerysetEqual(response.context['latest_poll_list'], [])
+
+    def test_index_view_with_a_future_poll_with_0_choices(self):
+        create_poll(question="Future poll.", days=30, num_choices=0)
+        response = self.client.get(reverse('polls:index'))
+        self.assertContains(response, "No polls are available.", status_code=200)
+        self.assertQuerysetEqual(response.context['latest_poll_list'], [])
+
+    def test_index_view_with_future_poll_and_past_poll_with_2_choices_each(self):
+        create_poll(question="Past poll.", days=-30, num_choices=2)
+        create_poll(question="Future poll.", days=30, num_choices=2)
         response = self.client.get(reverse('polls:index'))
         self.assertQuerysetEqual(
             response.context['latest_poll_list'],
             ['<Poll: Past poll.>']
         )
 
-    def test_index_view_with_two_past_polls(self):
-        """
-        The polls index page may display multiple polls.
-        """
-        create_poll(question="Past poll 1.", days=-30)
-        create_poll(question="Past poll 2.", days=-5)
+    def test_index_view_with_2_past_polls_with_0_and_2_choices(self):
+        create_poll(question="Past poll with 0 choices.", days=-30, num_choices=0)
+        create_poll(question="Past poll with 2 choices.", days=-30, num_choices=2)
+        response = self.client.get(reverse('polls:index'))
+        self.assertQuerysetEqual(
+            response.context['latest_poll_list'],
+            ['<Poll: Past poll with 2 choices.>']
+        )
+
+    def test_index_view_with_two_past_polls_with_2_choices_each(self):
+        create_poll(question="Past poll 1.", days=-30, num_choices=2)
+        create_poll(question="Past poll 2.", days=-5, num_choices=2)
         response = self.client.get(reverse('polls:index'))
         self.assertQuerysetEqual(
             response.context['latest_poll_list'],
              ['<Poll: Past poll 2.>', '<Poll: Past poll 1.>']
         )
 
-    def test_detail_view_with_a_future_poll(self):
-        """
-        The detail view of a poll with a pub_date in the future should
-        return a 404 not found.
-        """
-        future_poll = create_poll(question='Future poll.', days=5)
-        response = self.client.get(reverse('polls:detail', args=(future_poll.id,)))
-        self.assertEqual(response.status_code, 404)
 
-    def test_detail_view_with_a_past_poll(self):
-        """
-        The detail view of a poll with a pub_date in the past should display
-        the poll's question.
-        """
-        past_poll = create_poll(question='Past Poll.', days=-5)
+class DetailViewTests(TestCase):
+    """
+    Only a past poll with 2 or more choices will be accessible.
+    """
+    def test_detail_view_with_a_past_poll_with_2_choices(self):
+        past_poll = create_poll(question='Past Poll.', days=-5, num_choices=2)
         response = self.client.get(reverse('polls:detail', args=(past_poll.id,)))
         self.assertContains(response, past_poll.question, status_code=200)
 
+    def test_detail_view_with_a_past_poll_with_0_choices(self):
+        future_poll = create_poll(question='Past poll.', days=5, num_choices=0)
+        response = self.client.get(reverse('polls:detail', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
 
-# Deny access to future polls vote and results view through their url
-# include get_queryset in detail view to exclude future polls and test it
-# Exclude polls without choices
+    def test_detail_view_with_a_future_poll_with_2_choices(self):
+        future_poll = create_poll(question='Future poll.', days=5, num_choices=2)
+        response = self.client.get(reverse('polls:detail', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_detail_view_with_a_future_poll_with_0_choices(self):
+        future_poll = create_poll(question='Past poll.', days=5, num_choices=0)
+        response = self.client.get(reverse('polls:detail', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
+
+
+class ResultsViewTests(TestCase):
+    """
+    Only a past poll with 2 or more choices will be accessible.
+    """
+    def test_results_view_with_a_past_poll_with_2_choices(self):
+        past_poll = create_poll(question='Past Poll.', days=-5, num_choices=2)
+        response = self.client.get(reverse('polls:results', args=(past_poll.id,)))
+        self.assertContains(response, past_poll.question, status_code=200)
+
+    def test_results_view_with_a_past_poll_with_0_choices(self):
+        future_poll = create_poll(question='Past poll.', days=5, num_choices=0)
+        response = self.client.get(reverse('polls:results', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_results_view_with_a_future_poll_with_2_choices(self):
+        future_poll = create_poll(question='Future poll.', days=5, num_choices=2)
+        response = self.client.get(reverse('polls:results', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_results_view_with_a_future_poll_with_0_choices(self):
+        future_poll = create_poll(question='Past poll.', days=5, num_choices=0)
+        response = self.client.get(reverse('polls:results', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
+
+
+class VoteViewTests(TestCase):
+    """
+    Only a past poll with 2 or more choices will be accessible.
+    """
+    def test_vote_view_with_a_past_poll_with_2_choices(self):
+        past_poll = create_poll(question='Past Poll.', days=-5, num_choices=2)
+        response = self.client.get(reverse('polls:vote', args=(past_poll.id,)))
+        self.assertContains(response, past_poll.question, status_code=200)
+
+    def test_vote_view_with_a_past_poll_with_0_choices(self):
+        future_poll = create_poll(question='Past poll.', days=5, num_choices=0)
+        response = self.client.get(reverse('polls:vote', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_vote_view_with_a_future_poll_with_2_choices(self):
+        future_poll = create_poll(question='Future poll.', days=5, num_choices=2)
+        response = self.client.get(reverse('polls:vote', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_vote_view_with_a_future_poll_with_0_choices(self):
+        future_poll = create_poll(question='Past poll.', days=5, num_choices=0)
+        response = self.client.get(reverse('polls:vote', args=(future_poll.id,)))
+        self.assertEqual(response.status_code, 404)
